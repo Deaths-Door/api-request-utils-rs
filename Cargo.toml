@@ -1,0 +1,16 @@
+[package]
+name = "api-request-utils-rs"
+version = "0.1.0"
+edition = "2021"
+description = "This library aims to provide a straightforward and efficient solution for making api requests It is designed to be user-friendly, customizable, and extensible, allowing developers to easily integrate and interact with APIs in their Rust applications."
+license = "MIT"
+documentation = "https://docs.rs/api-request-utils-rs"
+repository = "https://github.com/Deaths-Door/api-request-utils-rs"
+homepage = "https://github.com/Deaths-Door/api-request-utils-rs"
+
+
+[dependencies]
+reqwest = "0.11"
+async-trait = "0.1.68"
+serde_json = "1.0"
+serde = "1.0"
