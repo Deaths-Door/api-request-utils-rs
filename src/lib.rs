@@ -21,7 +21,7 @@ pub trait RequestHandler<'a> {
     }
 
     /// Sends an HTTP request with the given endpoint and parameters, and returns the parsed response.
-    async fn request<T>(request_builder : reqwest::RequestBuilder) -> Result<T,reqwest::StatusCode> where T : for<'de> serde::Deserialize<'de> {
+    async fn request<T>(request_builder : reqwest::RequestBuilder) -> std::result::Result<T,reqwest::StatusCode> where T : for<'de> serde::Deserialize<'de> {
         let response = request_builder.send().await.expect("Error requesting request");
         let status = response.status();
         if status.is_success() {
