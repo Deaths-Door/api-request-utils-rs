@@ -38,7 +38,7 @@ pub trait RequestHandler<'a> {
     /// # Returns
     ///
     /// The modified `RequestBuilder` with default settings applied.
-    fn default_requestor(&self,endpoint : &str,parameters : Option<ParameterHashMap<'a>>,json : Option<&str>) -> reqwest::RequestBuilder {
+    fn default_requestor(&self,_endpoint : &str,_parameters : Option<ParameterHashMap<'a>>,_json : Option<&str>) -> reqwest::RequestBuilder {
         panic!("Function not implemented but is called");
     }
 
