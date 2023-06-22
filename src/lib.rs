@@ -8,40 +8,12 @@ pub type ParameterHashMap<'a> = HashMap<&'a str, Option<&'a str>>;
 
 /// A trait for handling HTTP requests.
 #[async_trait::async_trait]
-pub trait RequestHandler<'a> {
+pub trait RequestHandler<'a> : Defaults<'a> {
     /// The base URL for the requests.
     const BASE_URL : &'static str;
 
     /// The API key as string used for authentication.
     const API_KEY : Option<&'static str> = Some("apiKey");
-
-    /// Modifies the provided `RequestBuilder` with default headers.
-    ///
-    /// # Arguments
-    ///
-    /// * `request_builder` - The `RequestBuilder` to modify.
-    ///
-    /// # Returns
-    ///
-    /// The modified `RequestBuilder` with default headers set.
-    fn default_headers(&self,request_builder : reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        request_builder
-    }
-
-    /// Modifies the provided `RequestBuilder` with default settings for the request.
-    ///
-    /// # Arguments
-    ///
-    /// * `endpoint` - The endpoint for the request.
-    /// * `json` - The JSON payload for the request.
-    ///
-    /// # Returns
-    ///
-    /// The modified `RequestBuilder` with default settings applied.
-    ///TODO change this to defuault-get and default-post requestor
-    fn default_requestor(&self,_endpoint : &str,_parameters : Option<ParameterHashMap<'a>>,_json : Option<&str>) -> reqwest::RequestBuilder {
-        panic!("Function not implemented but is called");
-    }
 
     /// Joins the given endpoint with the base URL.
     ///
@@ -101,7 +73,7 @@ pub trait RequestHandler<'a> {
     /// }
     /// ```
     fn parameters<Function>(&self,function: Function) ->  ParameterHashMap<'a> where Function : FnOnce(&mut ParameterHashMap<'a>) {
-        let mut parameters : ParameterHashMap<'a> = HashMap::new();
+        let mut parameters : ParameterHashMap<'a> = HashMap::new()
         function(&mut parameters);
         parameters
     }
@@ -152,4 +124,56 @@ pub trait RequestHandler<'a> {
             Err(status)
         }
     }
+}
+
+pub trait Defaults<'a> {
+    /// Modifies the provided `RequestBuilder` with default headers.
+    ///
+    /// # Arguments
+    ///
+    /// * `request_builder` - The `RequestBuilder` to modify.
+    ///
+    /// # Returns
+    ///
+    /// The modified `RequestBuilder` with default headers set.
+    fn default_headers(&self,request_builder : reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        request_builder
+    }
+
+    /// Modifies the provided `RequestBuilder` with default parameters.
+    ///
+    /// # Arguments
+    ///
+    /// * `request_builder` - The `RequestBuilder` to modify.
+    ///
+    /// # Returns
+    ///
+    /// The modified `RequestBuilder` with default parameters set.
+    fn default_parameters(&self,request_builder : reqwest::RequestBuilder) -> ParameterHashMap {
+        HashMap::new()
+    }
+
+    /// Modifies the provided `RequestBuilder` with default settings for post request.
+    ///
+    /// # Arguments
+    ///
+    /// * `endpoint` - The endpoint for the request.
+    /// * `json` - The JSON payload for the request.
+    ///
+    /// # Returns
+    ///
+    /// The modified `RequestBuilder` with default settings applied.
+    fn default_post_requestor(&self,endpoint : &str, json : &'a str) -> reqwest::RequestBuilder;
+
+    /// Modifies the provided `RequestBuilder` with default settings for get request.
+    ///
+    /// # Arguments
+    ///
+    /// * `endpoint` - The endpoint for the request.
+    /// * `json` - The JSON payload for the request.
+    ///
+    /// # Returns
+    ///
+    /// The modified `RequestBuilder` with default settings applied.
+    fn default_get_requestor(&self,endpoint : &str,parameters : ParameterHashMap<'a>) -> reqwest::RequestBuilder;
 }
