@@ -38,6 +38,7 @@ pub trait RequestHandler<'a> {
     /// # Returns
     ///
     /// The modified `RequestBuilder` with default settings applied.
+    ///TODO change this to defuault-get and default-post requestor
     fn default_requestor(&self,_endpoint : &str,_parameters : Option<ParameterHashMap<'a>>,_json : Option<&str>) -> reqwest::RequestBuilder {
         panic!("Function not implemented but is called");
     }
