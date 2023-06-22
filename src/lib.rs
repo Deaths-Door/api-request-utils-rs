@@ -8,7 +8,7 @@ pub type ParameterHashMap<'a> = HashMap<&'a str, Option<&'a str>>;
 
 /// A trait for handling HTTP requests.
 #[async_trait::async_trait]
-pub trait RequestHandler<'a> : Defaults<'a> {
+pub trait RequestHandler<'a> : RequestDefaults<'a> {
     /// The base URL for the requests.
     const BASE_URL : &'static str;
 
@@ -73,7 +73,7 @@ pub trait RequestHandler<'a> : Defaults<'a> {
     /// }
     /// ```
     fn parameters<Function>(&self,function: Function) ->  ParameterHashMap<'a> where Function : FnOnce(&mut ParameterHashMap<'a>) {
-        let mut parameters : ParameterHashMap<'a> = HashMap::new()
+        let mut parameters : ParameterHashMap<'a> = HashMap::new();
         function(&mut parameters);
         parameters
     }
@@ -126,7 +126,7 @@ pub trait RequestHandler<'a> : Defaults<'a> {
     }
 }
 
-pub trait Defaults<'a> {
+pub trait RequestDefaults<'a> {
     /// Modifies the provided `RequestBuilder` with default headers.
     ///
     /// # Arguments
@@ -149,7 +149,7 @@ pub trait Defaults<'a> {
     /// # Returns
     ///
     /// The modified `RequestBuilder` with default parameters set.
-    fn default_parameters(&self,request_builder : reqwest::RequestBuilder) -> ParameterHashMap {
+    fn default_parameters(&self,_request_builder : reqwest::RequestBuilder) -> ParameterHashMap {
         HashMap::new()
     }
 
