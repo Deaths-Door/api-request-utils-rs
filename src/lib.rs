@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-pub use reqwest::{Client, Error as ReqwestError, RequestBuilder};
-pub use serde_json::{Error as SerdeJsonError, Result as SerdeJsonResult};
+pub use reqwest::*;
+pub use serde_json::*;
 
 
 pub type ParameterHashMap<'a> = HashMap<&'a str, Option<&'a str>>;
