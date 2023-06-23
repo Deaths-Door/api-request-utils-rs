@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 pub use reqwest::*;
 pub use serde_json::*;
-
+pub use serde::*;
 
 pub type ParameterHashMap<'a> = HashMap<&'a str, Option<&'a str>>;
 
