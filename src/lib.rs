@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
-pub use reqwest::*;
-pub use serde_json::*;
-pub use serde::*;
+pub use reqwest;
+pub use serde_json;
+pub use serde;
 
 pub type ParameterHashMap<'a> = HashMap<&'a str, Option<&'a str>>;
 
 /// A trait for handling HTTP requests.
 #[async_trait::async_trait]
-pub trait RequestHandler<'a> : RequestDefaults<'a> {
+pub trait RequestHandler<'a> {
     /// The base URL for the requests.
     const BASE_URL : &'static str;
 
@@ -149,8 +149,8 @@ pub trait RequestDefaults<'a> {
     /// # Returns
     ///
     /// The modified `RequestBuilder` with default parameters set.
-    fn default_parameters(&self,_request_builder : reqwest::RequestBuilder) -> ParameterHashMap {
-        HashMap::new()
+    fn default_parameters(&self,request_builder : reqwest::RequestBuilder) -> ParameterHashMap {
+        panic!("Method is not implemented")
     }
 
     /// Modifies the provided `RequestBuilder` with default settings for post request.
@@ -163,7 +163,9 @@ pub trait RequestDefaults<'a> {
     /// # Returns
     ///
     /// The modified `RequestBuilder` with default settings applied.
-    fn default_post_requestor(&self,endpoint : &str, json : &'a str) -> reqwest::RequestBuilder;
+    fn default_post_requestor(&self,endpoint : &str, json : &'a str) -> reqwest::RequestBuilder {
+        panic!("Method is not implemented")
+    }
 
     /// Modifies the provided `RequestBuilder` with default settings for get request.
     ///
@@ -175,5 +177,33 @@ pub trait RequestDefaults<'a> {
     /// # Returns
     ///
     /// The modified `RequestBuilder` with default settings applied.
-    fn default_get_requestor(&self,endpoint : &str,parameters : ParameterHashMap<'a>) -> reqwest::RequestBuilder;
+    fn default_get_requestor(&self,endpoint : &str,parameters : ParameterHashMap<'a>) -> reqwest::RequestBuilder {
+        panic!("Method is not implemented")
+    }
+
+    /// Adds an Authorization header to the given RequestBuilder with the provided token.
+    ///
+    /// The Authorization header follows the format "Bearer TOKEN", where TOKEN is the
+    /// authentication token used for authorization.
+    ///
+    /// # Arguments
+    ///
+    /// * request_builder - The RequestBuilder to add the header to.
+    /// * token - The authentication token to include in the Authorization header.
+    ///
+    /// # Returns
+    ///
+    /// The modified RequestBuilder with the Authorization header added.
+    ///
+    /// # Example
+    ///
+    /// ```rust 
+    /// use reqwest::RequestBuilder;
+    /// let request_builder = reqwest::Client::new().get("https://example.com"); 
+    /// let token = "YOUR_AUTH_TOKEN";
+    /// let modified_request_builder = authorization_header(&request_builder, token);
+    /// ```
+    fn authorization_header(&self,request_builder : reqwest::RequestBuilder,token : &str) -> reqwest::RequestBuilder {
+        request_builder.header("Authorization",format!(" Bearer {}",token))
+    }
 }
