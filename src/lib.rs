@@ -163,7 +163,7 @@ pub trait RequestDefaults<'a> {
     /// # Returns
     ///
     /// The modified `RequestBuilder` with default settings applied.
-    fn default_post_requestor(&self,endpoint : &str, json : &'a str) -> reqwest::RequestBuilder {
+    fn default_post_requestor(&self,endpoint : &'a str, json : &'a str) -> reqwest::RequestBuilder {
         panic!("Method is not implemented")
     }
 
@@ -177,7 +177,7 @@ pub trait RequestDefaults<'a> {
     /// # Returns
     ///
     /// The modified `RequestBuilder` with default settings applied.
-    fn default_get_requestor(&self,endpoint : &str,parameters : ParameterHashMap<'a>) -> reqwest::RequestBuilder {
+    fn default_get_requestor(&self,endpoint : &'a str,parameters : ParameterHashMap<'a>) -> reqwest::RequestBuilder {
         panic!("Method is not implemented")
     }
 
@@ -203,7 +203,7 @@ pub trait RequestDefaults<'a> {
     /// let token = "YOUR_AUTH_TOKEN";
     /// let modified_request_builder = authorization_header(&request_builder, token);
     /// ```
-    fn authorization_header(&self,request_builder : reqwest::RequestBuilder,token : &str) -> reqwest::RequestBuilder {
+    fn authorization_header(&self,request_builder : reqwest::RequestBuilder,token : &'a str) -> reqwest::RequestBuilder {
         request_builder.header("Authorization",format!(" Bearer {}",token))
     }
 }
