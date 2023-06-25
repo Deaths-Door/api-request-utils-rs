@@ -149,7 +149,7 @@ pub trait RequestDefaults<'a> {
     /// # Returns
     ///
     /// The modified `RequestBuilder` with default parameters set.
-    fn default_parameters(&self,request_builder : reqwest::RequestBuilder) -> RequestBuilder {
+    fn default_parameters(&self,request_builder : reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         request_builder
     }
 
