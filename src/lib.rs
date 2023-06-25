@@ -149,8 +149,8 @@ pub trait RequestDefaults<'a> {
     /// # Returns
     ///
     /// The modified `RequestBuilder` with default parameters set.
-    fn default_parameters(&self,request_builder : reqwest::RequestBuilder) -> ParameterHashMap {
-        panic!("Method is not implemented")
+    fn default_parameters(&self,request_builder : reqwest::RequestBuilder) -> RequestBuilder {
+        request_builder
     }
 
     /// Modifies the provided `RequestBuilder` with default settings for post request.
