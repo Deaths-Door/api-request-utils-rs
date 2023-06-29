@@ -202,6 +202,59 @@ pub trait RequestModifiers : RequestInfo  {
     fn create_endpoint(endpoint : &str) -> String {
         format!("{}/{}",Self::BASE_URL,endpoint)
     }
+
+    /// Resolves the error in the response and returns an option containing the value or `None`.
+    ///
+    /// # Arguments
+    ///
+    /// * `response` - The response as a `Result` type.
+    /// * `error_resolver` - The closure that handles the error and performs custom error handling.
+    ///
+    /// # Returns
+    ///
+    /// An option containing the value if the response is successful, otherwise `None`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// fn handle_error(error: &AuthErrorInfo) {
+    ///     // Custom error handling logic
+    ///     // ...
+    /// }
+    ///
+    /// let response: Result<i32, AuthError> = /* Some API response */;
+    /// let result = resolve_error(&response, handle_error);
+    ///
+    /// match result {
+    ///     Some(value) => {
+    ///         // Process the value
+    ///         // ...
+    ///     }
+    ///     None => {
+    ///         // Error occurred, handle accordingly
+    ///         // ...
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// In the example above, the `resolve_error` function takes a `response` of type `Result<T, E>`,
+    /// where `T` represents the success type and `E` represents the error type. It also accepts an
+    /// `error_resolver` closure of type `Fn(&E)`, which is responsible for handling the error and
+    /// performing custom error handling logic.
+    ///
+    /// If the response is successful (`Ok` variant), the function returns `Some(value)`, containing
+    /// the value. If the response is an error (`Err` variant), the `error_resolver` closure is invoked
+    /// with the error as the argument, and `None` is returned.
+    fn resolve_error<T,E,F>(response : &Result<T,E>,error_resolver: F) -> Option<&T> where F: Fn(&E), {
+        match response {
+            Ok(value) => Some(value),
+            Err(error) => {
+                error_resolver(error);
+                None
+            }
+        }
+    }
+
 }
 
 pub trait RequestDefaults : RequestModifiers {
@@ -219,7 +272,7 @@ pub trait RequestDefaults : RequestModifiers {
     ///     // Use the client to make HTTP requests
     ///     // ...
     /// }
-    fn client(&self) -> reqwest::Client;
+    fn client(&self) -> &reqwest::Client;
 
     /// Modifies the provided `RequestBuilder` with default headers.
     ///
@@ -230,7 +283,7 @@ pub trait RequestDefaults : RequestModifiers {
     /// # Returns
     ///
     /// The modified `RequestBuilder` with default headers set.
-    fn default_headers(request_builder : reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    fn default_headers(&self,request_builder : reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         request_builder
     }
 
@@ -243,7 +296,7 @@ pub trait RequestDefaults : RequestModifiers {
     /// # Returns
     ///
     /// The modified `RequestBuilder` with default parameters set.
-    fn default_parameters(request_builder : reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    fn default_parameters(&self,request_builder : reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         request_builder
     }
 
@@ -258,7 +311,7 @@ pub trait RequestDefaults : RequestModifiers {
     ///
     /// The modified `RequestBuilder` with default settings applied.
     fn default_post_requestor(&self,endpoint : &str, json : &str) -> reqwest::RequestBuilder {
-        self.client().post(Self::create_endpoint(endpoint)).body(json.to_owned())
+        self.default_parameters(self.default_headers(self.client().post(Self::create_endpoint(endpoint)))).body(json.to_owned())
     }
 
     /// Modifies the provided `RequestBuilder` with default settings for get request.
@@ -272,8 +325,8 @@ pub trait RequestDefaults : RequestModifiers {
     ///
     /// The modified `RequestBuilder` with default settings applied.
     fn default_get_requestor<'a>(&self,endpoint : &str,parameters : ParameterHashMap<'a>) -> reqwest::RequestBuilder {
-        self.client().get(Self::create_endpoint(endpoint)).query(&parameters)
-    } 
+        self.default_parameters(self.default_headers(self.client().get(Self::create_endpoint(endpoint)))).query(&parameters)
+    }
 }
 
 // Trait to provide some basic info about API
