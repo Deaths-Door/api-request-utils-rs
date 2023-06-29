@@ -1,186 +1,156 @@
+//! # api-request-utils-rs
+//! [![Crates.io](https://img.shields.io/crates/v/api-request-utils)](https://crates.io/crates/api-request-utils)
+//! [![Docs.rs](https://docs.rs/api-request-utils/badge.svg)](https://docs.rs/api-request-utils)
+//! 
+//! This library aims to provide a straightforward and efficient solution for making api requests It is designed to be user-friendly, customizable, and extensible, allowing developers to easily integrate and interact with APIs in their Rust applications.
+//! 
+//! ## Features
+//! 
+//! - Convenient functions for sending HTTP requests and handling responses.
+//! - Error handling utilities for handling different types of request errors.
+//! - JSON serialization and deserialization helpers.
+//! - Parameter encoding and query string generation utilities.
+//! - Request builder and modifier traits for customization and extensibility.
+//! 
+//! ## Installation
+//! 
+//! Add the following line to your `Cargo.toml` file:
+//! 
+//! ```toml
+//! api-request-utils = "0.1.6"
+//! ```
+//! 
+//! To enable the export feature and include the specified dependencies `(reqwest,serde_json, serde(with derive))`
+//! 
+//! ```toml
+//! api-request-utils = { version = "0.1.6", features = ["export"]}
+//! ```
+//! 
+//! ## Usage
+//! 
+//! Import the required modules and types in your Rust code:
+//! ```rust
+//! use api_request_utils::{
+//!    ParameterHashMap,
+//!     RequestError,
+//!     RequestHandler,
+//!     RequestInfo
+//!     };
+//! ```
+//! 
+//! Then implement the `RequestInfo` trait for your API client struct. Trait to provide some basic info about API : 
+//! 
+//! ```rust
+//! struct MyApiClient;
+//! 
+//! impl RequestInfo for MyApiClient {
+//!     ...
+//! }
+//! ```
+//! 
+//! Then implement the `RequestModifiers` trait for your API client struct. This trait provides methods for modifying the struct in a specific way:
+//! 
+//! ```rust
+//! impl RequestModifiers for MyApiClient {
+//!     ...
+//! }
+//! ```
+//! 
+//! Then implement the `RequestHandler` trait for your API client struct. This trait provides the request method for sending HTTP requests :
+//! 
+//! ```rust
+//! impl RequestHandler for MyApiClient {
+//!     ...
+//! }
+//! ```
+//! 
+//! Now just combine the methods , data and parameters / json to make the request and handle the error
+//! 
+//! Please note that the examples provided here are simplified and serve as a starting point. For comprehensive documentation of the crate, please visit the [crate documentation](https://docs.rs/api-request-utils-rs) for a better understanding of the crate's functionalities and APIs.
+//! 
+//! ## Contributing
+//! Contributions are welcome! If you find any issues or have suggestions for improvement, please open an issue or submit a pull request.
+
 use std::collections::HashMap;
 
+#[cfg(feature = "export")]
 pub use reqwest;
+#[cfg(feature = "export")]
 pub use serde_json;
+#[cfg(feature = "export")]
 pub use serde;
 
+/// A HashMap type used for storing parameters with optional values.
+///
+/// The keys are string references, and the values are optional string references.
 pub type ParameterHashMap<'a> = HashMap<&'a str, Option<&'a str>>;
+
+/// Enum representing different types of request errors.
+///
+/// The `Internal` variant represents internal errors with an associated string message.
+/// The `Json` variant represents errors related to JSON deserialization with an associated error value.
+pub enum RequestError<E> {
+    /// Internal error variant with an associated string message.
+    Internal(String),
+    /// JSON error variant with an associated error value.
+    Json(E),
+}
 
 /// A trait for handling HTTP requests.
 #[async_trait::async_trait]
-pub trait RequestHandler<'a> {
-    /// The base URL for the requests.
-    const BASE_URL : &'static str;
-
-    /// The API key as string used for authentication.
-    const API_KEY : Option<&'static str> = Some("apiKey");
-
-    /// Joins the given endpoint with the base URL.
+pub trait RequestHandler {
+    /// Sends a request using the given RequestBuilder and handles the response.
     ///
-    /// # Arguments
-    ///
-    /// * `endpoint` - The endpoint to join with the base URL.
-    ///
-    /// # Returns
-    ///
-    /// The joined URL as a `String`.
-    ///
-    /// # Example
+    /// # Examples
     ///
     /// ```rust
-    /// use std::collections::HashMap;
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let url = "https://api.example.com";
+    ///     let request = reqwest::Client::new().get(url);
     ///
-    /// struct MyRequestHandler;
-    ///
-    /// impl<'a> RequestHandler<'a> for MyRequestHandler {
-    ///     const BASE_URL: &'static str = "https://api.example.com";
-    ///
-    ///     fn make_request_url(&self, endpoint: &str) -> String {
-    ///         Self::join_endpoints(endpoint)
+    ///     match request::<serde_json::Value, serde_json::Value>(request).await {
+    ///         Ok(response) => {
+    ///             println!("Response: {:?}", response);
+    ///         }
+    ///         Err(error) => {
+    ///             match error {
+    ///                 RequestError::Internal(message) => {
+    ///                     eprintln!("Internal Error: {}", message);
+    ///                 }
+    ///                 RequestError::Json(error_data) => {
+    ///                     eprintln!("JSON Error: {:?}", error_data);
+    ///                 }
+    ///             }
+    ///         }
     ///     }
     /// }
     /// ```
-    fn join_endpoints(endpoint : &str) -> String {
-        format!("{}/{}",Self::BASE_URL,endpoint)
-    }
+    async fn request<T,E>(request: reqwest::RequestBuilder) -> Result<T,RequestError<E>> where T : serde::de::DeserializeOwned , E : serde::de::DeserializeOwned {
+        let response_result = request.send().await;
+        match response_result {
+            Err(error) => return Err(RequestError::Internal(error.to_string())),
+            Ok(response) => {
+                let status = response.status();
+                let body_result = response.text().await;
 
-    /// Builds the parameter hashmap using the given function.
-    ///
-    /// # Arguments
-    ///
-    /// * `function` - A closure that takes a mutable reference to a `ParameterHashMap` and modifies it.
-    ///
-    /// # Returns
-    ///
-    /// The populated `ParameterHashMap`.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use std::collections::HashMap;
-    ///
-    /// struct MyRequestHandler;
-    ///
-    /// impl<'a> RequestHandler<'a> for MyRequestHandler {
-    ///     const BASE_URL: &'static str = "https://api.example.com";
-    ///
-    ///     fn make_parameters(&self) -> ParameterHashMap<'a> {
-    ///         self.parameters(|params| {
-    ///             params.insert("key1", Some("value1"));
-    ///             params.insert("key2", Some("value2"));
-    ///         })
-    ///     }
-    /// }
-    /// ```
-    fn parameters<Function>(&self,function: Function) ->  ParameterHashMap<'a> where Function : FnOnce(&mut ParameterHashMap<'a>) {
-        let mut parameters : ParameterHashMap<'a> = HashMap::new();
-        function(&mut parameters);
-        parameters
-    }
+                if body_result.is_err() {
+                    return Err(RequestError::Internal("Error in reading response body".to_string()));
+                };
+                
+                let body_string = body_result.unwrap();
 
-    /// Sends an HTTP request with the given `RequestBuilder`, and returns the parsed response.
-    ///
-    /// # Arguments
-    ///
-    /// * `request_builder` - The `RequestBuilder` containing the configured request.
-    ///
-    /// # Returns
-    ///
-    /// A `Result` containing the parsed response on success, or a `StatusCode` on failure.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use std::collections::HashMap;
-    ///
-    /// struct MyRequestHandler;
-    ///
-    /// #[derive(serde::Deserialize)]
-    /// struct MyResponse {
-    ///     // Define your response structure here
-    /// }
-    ///
-    /// #[async_trait::async_trait]
-    /// impl<'a> RequestHandler<'a> for MyRequestHandler {
-    ///     const BASE_URL: &'static str = "https://api.example.com";
-    ///
-    ///     async fn make_request<T>(&self, request_builder: RequestBuilder) -> Result<T, StatusCode>
-    ///     where
-    ///         T: for<'de> serde::Deserialize<'de>,
-    ///     {
-    ///         self.request(request_builder).await
-    ///     }
-    /// }
-    /// ```
-    async fn request<T>(&self,request_builder : reqwest::RequestBuilder) -> std::result::Result<T,reqwest::StatusCode> where T : for<'de> serde::Deserialize<'de> {
-        let response = request_builder.send().await.expect("Error requesting request");
-        let status = response.status();
-        if status.is_success() {
-            let body = response.text().await.expect("Error in reading response body");
-            let deserialized : T = serde_json::from_str(&body).expect("Error deserializing response body");
-            Ok(deserialized)
-        }
-        else {
-            Err(status)
-        }
+                match status.is_success() {
+                    true => return Ok(serde_json::from_str(&body_string).unwrap()),
+                    false => return Err(RequestError::Json(serde_json::from_str(&body_string).unwrap())),
+                }
+            }
+        };
     }
-}
+} 
 
-pub trait RequestDefaults<'a> {
-    /// Modifies the provided `RequestBuilder` with default headers.
-    ///
-    /// # Arguments
-    ///
-    /// * `request_builder` - The `RequestBuilder` to modify.
-    ///
-    /// # Returns
-    ///
-    /// The modified `RequestBuilder` with default headers set.
-    fn default_headers(&self,request_builder : reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        request_builder
-    }
-
-    /// Modifies the provided `RequestBuilder` with default parameters.
-    ///
-    /// # Arguments
-    ///
-    /// * `request_builder` - The `RequestBuilder` to modify.
-    ///
-    /// # Returns
-    ///
-    /// The modified `RequestBuilder` with default parameters set.
-    fn default_parameters(&self,request_builder : reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        request_builder
-    }
-
-    /// Modifies the provided `RequestBuilder` with default settings for post request.
-    ///
-    /// # Arguments
-    ///
-    /// * `endpoint` - The endpoint for the request.
-    /// * `json` - The JSON payload for the request.
-    ///
-    /// # Returns
-    ///
-    /// The modified `RequestBuilder` with default settings applied.
-    fn default_post_requestor(&self,endpoint : &'a str, json : &'a str) -> reqwest::RequestBuilder {
-        panic!("Method is not implemented")
-    }
-
-    /// Modifies the provided `RequestBuilder` with default settings for get request.
-    ///
-    /// # Arguments
-    ///
-    /// * `endpoint` - The endpoint for the request.
-    /// * `json` - The JSON payload for the request.
-    ///
-    /// # Returns
-    ///
-    /// The modified `RequestBuilder` with default settings applied.
-    fn default_get_requestor(&self,endpoint : &'a str,parameters : ParameterHashMap<'a>) -> reqwest::RequestBuilder {
-        panic!("Method is not implemented")
-    }
-
+/// This trait provides methods for modifying the struct in a specific way:
+pub trait RequestModifiers : RequestInfo  {
     /// Adds an Authorization header to the given RequestBuilder with the provided token.
     ///
     /// The Authorization header follows the format "Bearer TOKEN", where TOKEN is the
@@ -203,7 +173,114 @@ pub trait RequestDefaults<'a> {
     /// let token = "YOUR_AUTH_TOKEN";
     /// let modified_request_builder = authorization_header(&request_builder, token);
     /// ```
-    fn authorization_header(&self,request_builder : reqwest::RequestBuilder,token : &'a str) -> reqwest::RequestBuilder {
+    fn authorization_header(request_builder : reqwest::RequestBuilder,token : &str) -> reqwest::RequestBuilder {
         request_builder.header("Authorization",format!(" Bearer {}",token))
     }
+
+    /// Joins the given endpoint with the base URL.
+    ///
+    /// # Arguments
+    ///
+    /// * `endpoint` - The endpoint to join with the base URL.
+    ///
+    /// # Returns
+    ///
+    /// The joined URL as a `String`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// struct MyStruct;
+    /// impl RequestHandler for ... {
+    ///     const BASE_URL: &'static str = "https://api.example.com";
+    /// }
+    /// fn main(){
+    ///    let url =  MyStruct::create_endpoint("get");
+    ///    assert_eq!(url,"https://api.example.com/get"); // using the default implementation
+    /// }
+    /// ```
+    fn create_endpoint(endpoint : &str) -> String {
+        format!("{}/{}",Self::BASE_URL,endpoint)
+    }
+}
+
+pub trait RequestDefaults : RequestModifiers {
+    /// Returns the reqwest::Client instance associated with the API client.
+    ///
+    /// The client is used to send HTTP requests to the API.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// fn main() {
+    ///     let api_client = APIClient::new();
+    ///     let client = api_client.client();
+    ///
+    ///     // Use the client to make HTTP requests
+    ///     // ...
+    /// }
+    fn client(&self) -> reqwest::Client;
+
+    /// Modifies the provided `RequestBuilder` with default headers.
+    ///
+    /// # Arguments
+    ///
+    /// * `request_builder` - The `RequestBuilder` to modify.
+    ///
+    /// # Returns
+    ///
+    /// The modified `RequestBuilder` with default headers set.
+    fn default_headers(request_builder : reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        request_builder
+    }
+
+    /// Modifies the provided `RequestBuilder` with default parameters.
+    ///
+    /// # Arguments
+    ///
+    /// * `request_builder` - The `RequestBuilder` to modify.
+    ///
+    /// # Returns
+    ///
+    /// The modified `RequestBuilder` with default parameters set.
+    fn default_parameters(request_builder : reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        request_builder
+    }
+
+    /// Modifies the provided `RequestBuilder` with default settings for post request.
+    ///
+    /// # Arguments
+    ///
+    /// * `endpoint` - The endpoint for the request.
+    /// * `json` - The JSON payload for the request.
+    ///
+    /// # Returns
+    ///
+    /// The modified `RequestBuilder` with default settings applied.
+    fn default_post_requestor(&self,endpoint : &str, json : &str) -> reqwest::RequestBuilder {
+        self.client().post(Self::create_endpoint(endpoint)).body(json.to_owned())
+    }
+
+    /// Modifies the provided `RequestBuilder` with default settings for get request.
+    ///
+    /// # Arguments
+    ///
+    /// * `endpoint` - The endpoint for the request.
+    /// * `parameters` - The Parameters for the request.
+    ///
+    /// # Returns
+    ///
+    /// The modified `RequestBuilder` with default settings applied.
+    fn default_get_requestor<'a>(&self,endpoint : &str,parameters : ParameterHashMap<'a>) -> reqwest::RequestBuilder {
+        self.client().get(Self::create_endpoint(endpoint)).query(&parameters)
+    } 
+}
+
+// Trait to provide some basic info about API
+pub trait RequestInfo {
+    /// The base URL for the requests.
+    const BASE_URL : &'static str;
+
+    /// The API key as string used for authentication.
+    const API_KEY_STR : Option<&'static str> = Some("apiKey");
 }
