@@ -81,7 +81,6 @@ pub use serde_json;
 pub use serde;
 
 /// A HashMap type used for storing parameters with optional values.
-///
 /// The keys are string references, and the values are optional string references.
 pub type ParameterHashMap<'a> = HashMap<&'a str, Option<&'a str>>;
 
@@ -245,7 +244,7 @@ pub trait RequestModifiers : RequestInfo  {
     /// If the response is successful (`Ok` variant), the function returns `Some(value)`, containing
     /// the value. If the response is an error (`Err` variant), the `error_resolver` closure is invoked
     /// with the error as the argument, and `None` is returned.
-    fn resolve_error<T,E,F>(response : &Result<T,E>,error_resolver: F) -> Option<&T> where F: Fn(&E), {
+    fn resolve_error<T,E,F>(response : &Result<T,E>,error_resolver: F) -> Option<&T> where F: Fn(&E) {
         match response {
             Ok(value) => Some(value),
             Err(error) => {
@@ -333,7 +332,4 @@ pub trait RequestDefaults : RequestModifiers {
 pub trait RequestInfo {
     /// The base URL for the requests.
     const BASE_URL : &'static str;
-
-    /// The API key as string used for authentication.
-    const API_KEY_STR : Option<&'static str> = Some("apiKey");
 }
