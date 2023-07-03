@@ -73,16 +73,13 @@
 
 use std::collections::HashMap;
 
-#[cfg(feature = "export")]
 pub use reqwest;
-#[cfg(feature = "export")]
 pub use serde_json;
-#[cfg(feature = "export")]
 pub use serde;
 
 /// A HashMap type used for storing parameters with optional values.
 /// The keys are string references, and the values are optional string references.
-pub type ParameterHashMap<'a> = HashMap<&'a str, Option<&'a str>>;
+pub type ParameterHashMap<'a> = HashMap<&'a str,serde_json::Value>;
 
 /// Enum representing different types of request errors.
 ///
