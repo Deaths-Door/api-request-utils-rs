@@ -1,6 +1,6 @@
 # api-request-utils-rs
-[![Crates.io](https://img.shields.io/crates/v/api-request-utils)](https://crates.io/crates/api-request-utils)
-[![Docs.rs](https://docs.rs/api-request-utils/badge.svg)](https://docs.rs/api-request-utils)
+[![Crates.io](https://img.shields.io/crates/v/api-request-utils)](https://crates.io/crates/api-request-utils-rs)
+[![Docs.rs](https://docs.rs/api-request-utils/badge.svg)](https://docs.rs/api-request-utils-rs)
 
 This library aims to provide a straightforward and efficient solution for making api requests It is designed to be user-friendly, customizable, and extensible, allowing developers to easily integrate and interact with APIs in their Rust applications.
 

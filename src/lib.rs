@@ -1,75 +1,6 @@
-//! # api-request-utils-rs
-//! [![Crates.io](https://img.shields.io/crates/v/api-request-utils)](https://crates.io/crates/api-request-utils)
-//! [![Docs.rs](https://docs.rs/api-request-utils/badge.svg)](https://docs.rs/api-request-utils)
-//! 
-//! This library aims to provide a straightforward and efficient solution for making api requests It is designed to be user-friendly, customizable, and extensible, allowing developers to easily integrate and interact with APIs in their Rust applications.
-//! 
-//! ## Features
-//! 
-//! - Convenient functions for sending HTTP requests and handling responses.
-//! - Error handling utilities for handling different types of request errors.
-//! - JSON serialization and deserialization helpers.
-//! - Parameter encoding and query string generation utilities.
-//! - Request builder and modifier traits for customization and extensibility.
-//! 
-//! ## Installation
-//! 
-//! Add the following line to your `Cargo.toml` file:
-//! 
-//! ```toml
-//! api-request-utils = "0.1.6"
-//! ```
-//! 
-//! To enable the export feature and include the specified dependencies `(reqwest,serde_json, serde(with derive))`
-//! 
-//! ```toml
-//! api-request-utils = { version = "0.1.6", features = ["export"]}
-//! ```
-//! 
-//! ## Usage
-//! 
-//! Import the required modules and types in your Rust code:
-//! ```rust
-//! use api_request_utils::{
-//!    ParameterHashMap,
-//!     RequestError,
-//!     RequestHandler,
-//!     RequestInfo
-//!     };
-//! ```
-//! 
-//! Then implement the `RequestInfo` trait for your API client struct. Trait to provide some basic info about API : 
-//! 
-//! ```rust
-//! struct MyApiClient;
-//! 
-//! impl RequestInfo for MyApiClient {
-//!     ...
-//! }
-//! ```
-//! 
-//! Then implement the `RequestModifiers` trait for your API client struct. This trait provides methods for modifying the struct in a specific way:
-//! 
-//! ```rust
-//! impl RequestModifiers for MyApiClient {
-//!     ...
-//! }
-//! ```
-//! 
-//! Then implement the `RequestHandler` trait for your API client struct. This trait provides the request method for sending HTTP requests :
-//! 
-//! ```rust
-//! impl RequestHandler for MyApiClient {
-//!     ...
-//! }
-//! ```
-//! 
-//! Now just combine the methods , data and parameters / json to make the request and handle the error
-//! 
-//! Please note that the examples provided here are simplified and serve as a starting point. For comprehensive documentation of the crate, please visit the [crate documentation](https://docs.rs/api-request-utils-rs) for a better understanding of the crate's functionalities and APIs.
-//! 
-//! ## Contributing
-//! Contributions are welcome! If you find any issues or have suggestions for improvement, please open an issue or submit a pull request.
+#![doc = include_str!("../README.md")]
+
+#![forbid(missing_docs)]
 
 use std::collections::HashMap;
 
@@ -94,7 +25,7 @@ pub enum RequestError<E> {
 
 /// A trait for handling HTTP requests.
 #[async_trait::async_trait]
-pub trait RequestHandler {
+pub trait RequestHandler : RequestDefaults{
     /// Sends a request using the given RequestBuilder and handles the response.
     ///
     /// # Examples
@@ -143,6 +74,94 @@ pub trait RequestHandler {
             }
         };
     }
+    
+    /// Resolves the error in the response and returns an option containing the value or `None`.
+    ///
+    /// # Arguments
+    ///
+    /// * `response` - The response as a `Result` type.
+    /// * `error_resolver` - The closure that handles the error and performs custom error handling.
+    ///
+    /// # Returns
+    ///
+    /// An option containing the value if the response is successful, otherwise `None`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// fn handle_error(error: &AuthErrorInfo) {
+    ///     // Custom error handling logic
+    ///     // ...
+    /// }
+    ///
+    /// let response: Result<i32, AuthError> = /* Some API response */;
+    /// let result = resolve_error(&response, handle_error);
+    ///
+    /// match result {
+    ///     Some(value) => {
+    ///         // Process the value
+    ///         // ...
+    ///     }
+    ///     None => {
+    ///         // Error occurred, handle accordingly
+    ///         // ...
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// In the example above, the `resolve_error` function takes a `response` of type `Result<T, E>`,
+    /// where `T` represents the success type and `E` represents the error type. It also accepts an
+    /// `error_resolver` closure of type `Fn(&E)`, which is responsible for handling the error and
+    /// performing custom error handling logic.
+    ///
+    /// If the response is successful (`Ok` variant), the function returns `Some(value)`, containing
+    /// the value. If the response is an error (`Err` variant), the `error_resolver` closure is invoked
+    /// with the error as the argument, and `None` is returned.
+    fn resolve_error<T,E>(&self,response : Result<T,E>) -> Option<T> {
+        match response {
+            Ok(value) => Some(value),
+            Err(error) => {
+                (self.default_error_resolver())(error);
+                None
+            }
+        }
+    }
+    /// Handles a GET request to the specified endpoint with the provided parameters and returns the response data of type `T`.
+    /// 
+    /// This asynchronous function constructs (by default) a GET request using the `default_get_requestor` method with the given endpoint and parameters. 
+    /// It then sends the request using the request method, expecting a response of type `T` or an error of type `E`.
+    /// The error is resolved using the `resolve_error` method and returns an `Option<T>` representing the response data if successful,
+    /// or `None` if an error occurred.
+    /// 
+    /// # Arguments
+    ///
+    /// * `endpoint` - The endpoint URL to send the GET request to.
+    /// * `parameters` - A hashmap containing any parameters to include in the request.
+    ///
+    async fn get_request_handler<'l,T,E>(&self,endpoint : &str,parameters : ParameterHashMap<'l>) -> Option<T> where  T: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned {
+        let request = self.default_get_requestor(endpoint,parameters);
+        let response = Self::request::<T,E>(request).await;
+        self.resolve_error(response)
+    }
+
+    /// Handles a POST request to the specified endpoint with the provided JSON payload and returns the response data of type T.
+    ///
+    /// This asynchronous function constructs a POST request using the `default_post_requestor` method with the given endpoint and json payload. 
+    /// It then sends the request using the request method, expecting a response of type `T` or an error of type `E`
+    /// The error is resolved using the `resolve_error` method and returns an `Option<T>` representing the response data if successful, 
+    /// or `None` if an error occurred.
+    /// # Arguments
+    ///
+    /// * `endpoint` - The endpoint URL to send the POST request to.
+    /// * `json` - A string containing the JSON payload to include in the request.
+    ///
+
+    async fn post_request_handler<T,E>(&self,endpoint : &str,json : &str) -> Option<T> where  T: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned {
+        let request = self.default_post_requestor(endpoint,json);
+        let response = Self::request::<T,E>(request).await;
+        self.resolve_error(response)
+    }
+
 } 
 
 /// This trait provides methods for modifying the struct in a specific way:
@@ -198,61 +217,9 @@ pub trait RequestModifiers : RequestInfo  {
     fn create_endpoint(endpoint : &str) -> String {
         format!("{}/{}",Self::BASE_URL,endpoint)
     }
-
-    /// Resolves the error in the response and returns an option containing the value or `None`.
-    ///
-    /// # Arguments
-    ///
-    /// * `response` - The response as a `Result` type.
-    /// * `error_resolver` - The closure that handles the error and performs custom error handling.
-    ///
-    /// # Returns
-    ///
-    /// An option containing the value if the response is successful, otherwise `None`.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// fn handle_error(error: &AuthErrorInfo) {
-    ///     // Custom error handling logic
-    ///     // ...
-    /// }
-    ///
-    /// let response: Result<i32, AuthError> = /* Some API response */;
-    /// let result = resolve_error(&response, handle_error);
-    ///
-    /// match result {
-    ///     Some(value) => {
-    ///         // Process the value
-    ///         // ...
-    ///     }
-    ///     None => {
-    ///         // Error occurred, handle accordingly
-    ///         // ...
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// In the example above, the `resolve_error` function takes a `response` of type `Result<T, E>`,
-    /// where `T` represents the success type and `E` represents the error type. It also accepts an
-    /// `error_resolver` closure of type `Fn(&E)`, which is responsible for handling the error and
-    /// performing custom error handling logic.
-    ///
-    /// If the response is successful (`Ok` variant), the function returns `Some(value)`, containing
-    /// the value. If the response is an error (`Err` variant), the `error_resolver` closure is invoked
-    /// with the error as the argument, and `None` is returned.
-    fn resolve_error<T,E,F>(response : &Result<T,E>,error_resolver: F) -> Option<&T> where F: Fn(&E) {
-        match response {
-            Ok(value) => Some(value),
-            Err(error) => {
-                error_resolver(error);
-                None
-            }
-        }
-    }
-
 }
 
+/// The RequestDefaults trait provides a set of default methods for configuring and modifying HTTP requests.
 pub trait RequestDefaults : RequestModifiers {
     /// Returns the reqwest::Client instance associated with the API client.
     ///
@@ -269,6 +236,13 @@ pub trait RequestDefaults : RequestModifiers {
     ///     // ...
     /// }
     fn client(&self) -> &reqwest::Client;
+
+    // Returns the default error resolver function for handling errors of type T.
+    ///
+    /// This function is used to handle errors that occur during API requests and responses. The error resolver function takes an error of type T as input and returns a reference to a dynamic function that handles the error. The dynamic function can be customized to handle specific error types or perform specific error handling logic.
+    ///
+    /// Note: The actual implementation of the error resolver function is not provided here, as it may vary depending on the specific use case and error type T.
+    fn default_error_resolver<T>(&self) -> &dyn Fn(T);
 
     /// Modifies the provided `RequestBuilder` with default headers.
     ///
@@ -325,7 +299,7 @@ pub trait RequestDefaults : RequestModifiers {
     }
 }
 
-// Trait to provide some basic info about API
+/// Trait to provide some basic info about API
 pub trait RequestInfo {
     /// The base URL for the requests.
     const BASE_URL : &'static str;
