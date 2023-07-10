@@ -7,6 +7,7 @@ use std::collections::HashMap;
 pub use reqwest;
 pub use serde_json;
 pub use serde;
+pub use async_trait;
 
 /// A HashMap type used for storing parameters with optional values.
 /// The keys are string references, and the values are optional string references.
