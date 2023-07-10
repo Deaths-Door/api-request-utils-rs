@@ -165,7 +165,7 @@ pub trait RequestHandler : RequestDefaults{
 } 
 
 /// This trait provides methods for modifying the struct in a specific way:
-pub trait RequestModifiers : RequestInfo  {
+pub trait RequestModifiers: RequestInfo  {
     /// Adds an Authorization header to the given RequestBuilder with the provided token.
     ///
     /// The Authorization header follows the format "Bearer TOKEN", where TOKEN is the
@@ -219,8 +219,8 @@ pub trait RequestModifiers : RequestInfo  {
     }
 }
 
-/// The RequestDefaults trait provides a set of default methods for configuring and modifying HTTP requests.
-pub trait RequestDefaults : RequestModifiers {
+/// The RequestDefaults trait provides default methods for configuring and modifying HTTP requests.
+pub trait RequestDefaults: RequestModifiers {
     /// Returns the reqwest::Client instance associated with the API client.
     ///
     /// The client is used to send HTTP requests to the API.
@@ -237,12 +237,15 @@ pub trait RequestDefaults : RequestModifiers {
     /// }
     fn client(&self) -> &reqwest::Client;
 
-    // Returns the default error resolver function for handling errors of type T.
+    /// Sets the type of the default error resolver function 
+    type ErrorType;
+    
+    /// Returns the default error resolver function for handling errors of type [ErrorType.
     ///
     /// This function is used to handle errors that occur during API requests and responses. The error resolver function takes an error of type T as input and returns a reference to a dynamic function that handles the error. The dynamic function can be customized to handle specific error types or perform specific error handling logic.
     ///
     /// Note: The actual implementation of the error resolver function is not provided here, as it may vary depending on the specific use case and error type T.
-    fn default_error_resolver<T>(&self) -> &dyn Fn(T);
+    fn default_error_resolver(&self) -> &dyn Fn(ErrorType);
 
     /// Modifies the provided `RequestBuilder` with default headers.
     ///
