@@ -13,6 +13,8 @@ pub use async_trait;
 /// The keys are string references, and the values are optional string references.
 pub type ParameterHashMap<'a> = HashMap<&'a str,serde_json::Value>;
 
+type FunctionReturnType<E> = dyn Fn(RequestError<E>) -> () + Sync;
+
 /// Enum representing different types of request errors.
 ///
 /// The `Internal` variant represents internal errors with an associated string message.
@@ -118,11 +120,11 @@ pub trait RequestHandler : RequestDefaults{
     /// If the response is successful (`Ok` variant), the function returns `Some(value)`, containing
     /// the value. If the response is an error (`Err` variant), the `error_resolver` closure is invoked
     /// with the error as the argument, and `None` is returned.
-    fn resolve_error<T,E>(&self,response : Result<T,E>) -> Option<T> {
+    fn resolve_error<T,E>(&self,response : Result<T,E>,error_handler: &dyn Fn(E)) -> Option<T> {
         match response {
             Ok(value) => Some(value),
             Err(error) => {
-                (self.default_error_resolver())(error);
+                error_handler(error);
                 None
             }
         }
@@ -139,10 +141,10 @@ pub trait RequestHandler : RequestDefaults{
     /// * `endpoint` - The endpoint URL to send the GET request to.
     /// * `parameters` - A hashmap containing any parameters to include in the request.
     ///
-    async fn get_request_handler<'l,T,E>(&self,endpoint : &str,parameters : ParameterHashMap<'l>) -> Option<T> where  T: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned {
+    async fn get_request_handler<'l,T,E>(&self,endpoint : &str,parameters : ParameterHashMap<'l>,error_handler : &FunctionReturnType<E>) -> Option<T> where  T: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned {
         let request = self.default_get_requestor(endpoint,parameters);
         let response = Self::request::<T,E>(request).await;
-        self.resolve_error(response)
+         self.resolve_error(response,&error_handler)
     }
 
     /// Handles a POST request to the specified endpoint with the provided JSON payload and returns the response data of type T.
@@ -156,11 +158,10 @@ pub trait RequestHandler : RequestDefaults{
     /// * `endpoint` - The endpoint URL to send the POST request to.
     /// * `json` - A string containing the JSON payload to include in the request.
     ///
-
-    async fn post_request_handler<T,E>(&self,endpoint : &str,json : &str) -> Option<T> where  T: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned {
+    async fn post_request_handler<T,E>(&self,endpoint : &str,json : &str,error_handler : &FunctionReturnType<E>) -> Option<T> where  T: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned {
         let request = self.default_post_requestor(endpoint,json);
         let response = Self::request::<T,E>(request).await;
-        self.resolve_error(response)
+        self.resolve_error(response,&error_handler)
     }
 
 } 
@@ -246,7 +247,7 @@ pub trait RequestDefaults: RequestModifiers {
     /// This function is used to handle errors that occur during API requests and responses. The error resolver function takes an error of type T as input and returns a reference to a dynamic function that handles the error. The dynamic function can be customized to handle specific error types or perform specific error handling logic.
     ///
     /// Note: The actual implementation of the error resolver function is not provided here, as it may vary depending on the specific use case and error type T.
-    fn default_error_resolver(&self) -> &dyn Fn(ErrorType);
+    fn default_error_handler(&self) -> FunctionReturnType<Self::ErrorType>;
 
     /// Modifies the provided `RequestBuilder` with default headers.
     ///
