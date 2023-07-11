@@ -79,11 +79,9 @@ pub trait RequestHandler: RequestDefaults {
 
                 match body_result {
                     Err(_) => return Err(RequestError::UnableToReadBody),
-                    Ok(body) => {
-                        match status.is_success() {
-                            true => return Ok(serde_json::from_str(&body).unwrap()),
-                            false => return Err(RequestError::Json(serde_json::from_str(&body).unwrap())),
-                        }
+                    Ok(body) => match status.is_success() {
+                        true => return Ok(serde_json::from_str(&body).unwrap()),
+                        false => return Err(RequestError::Json(serde_json::from_str(&body).unwrap())),
                     }
                 };
             }
