@@ -17,13 +17,7 @@ This library aims to provide a straightforward and efficient solution for making
 Add the following line to your `Cargo.toml` file:
 
 ```toml
-api-request-utils = "0.1.6"
-```
-
-To enable the export feature and include the specified dependencies `(reqwest,serde_json, serde(with derive))`
-
-```toml
-api-request-utils = { version = "0.1.6", features = ["export"]}
+api-request-utils = "0.2.0"
 ```
 
 ## Usage
