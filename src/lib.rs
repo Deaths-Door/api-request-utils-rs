@@ -13,22 +13,35 @@ pub use async_trait;
 /// The keys are string references, and the values are optional string references.
 pub type ParameterHashMap<'a> = HashMap<&'a str,serde_json::Value>;
 
-type FunctionReturnType<E> = dyn Fn(RequestError<E>) -> () + Sync;
+/// Alias for the `reqwest::Error` type.
+pub type ReqwestError = reqwest::Error;
+
+/// Alias for the `serde_json::Error` type.
+pub type DeserializationError = serde_json::Error;
+
+/// Alias for a closure type that takes a `RequestError<E>` as an argument and returns `()`.
+///
+/// The closure should be both `Send` and `Sync`.
+pub type ErrorHandler<E> = dyn Fn(RequestError<E>) + Sync;
 
 /// Enum representing different types of request errors.
-///
-/// The `Internal` variant represents internal errors with an associated string message.
-/// The `Json` variant represents errors related to JSON deserialization with an associated error value.
 pub enum RequestError<E> {
-    /// Internal error variant with an associated string message.
-    Internal(String),
-    /// JSON error variant with an associated error value.
+    /// Request sending error variant.
+    RequestingError(ReqwestError),
+
+    /// Error indicating inability to read the response body.
+    UnableToReadBody,
+
+    /// Error indicating invalid JSON body during deserialization.
+    InvalidJsonBody(DeserializationError),
+
+    /// Json when request is not successful (default when status code is not 200)
     Json(E),
 }
 
 /// A trait for handling HTTP requests.
 #[async_trait::async_trait]
-pub trait RequestHandler : RequestDefaults{
+pub trait RequestHandler: RequestDefaults {
     /// Sends a request using the given RequestBuilder and handles the response.
     ///
     /// # Examples
@@ -59,21 +72,20 @@ pub trait RequestHandler : RequestDefaults{
     async fn request<T,E>(request: reqwest::RequestBuilder) -> Result<T,RequestError<E>> where T : serde::de::DeserializeOwned , E : serde::de::DeserializeOwned {
         let response_result = request.send().await;
         match response_result {
-            Err(error) => return Err(RequestError::Internal(error.to_string())),
+            Err(error) => return Err(RequestError::RequestingError(error)),
             Ok(response) => {
                 let status = response.status();
                 let body_result = response.text().await;
 
-                if body_result.is_err() {
-                    return Err(RequestError::Internal("Error in reading response body".to_string()));
+                match body_result {
+                    Err(_) => return Err(RequestError::UnableToReadBody),
+                    Ok(body) => {
+                        match status.is_success() {
+                            true => return Ok(serde_json::from_str(&body).unwrap()),
+                            false => return Err(RequestError::Json(serde_json::from_str(&body).unwrap())),
+                        }
+                    }
                 };
-                
-                let body_string = body_result.unwrap();
-
-                match status.is_success() {
-                    true => return Ok(serde_json::from_str(&body_string).unwrap()),
-                    false => return Err(RequestError::Json(serde_json::from_str(&body_string).unwrap())),
-                }
             }
         };
     }
@@ -141,10 +153,10 @@ pub trait RequestHandler : RequestDefaults{
     /// * `endpoint` - The endpoint URL to send the GET request to.
     /// * `parameters` - A hashmap containing any parameters to include in the request.
     ///
-    async fn get_request_handler<'l,T,E>(&self,endpoint : &str,parameters : ParameterHashMap<'l>,error_handler : &FunctionReturnType<E>) -> Option<T> where  T: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned {
+    async fn get_request_handler<'l,T,E>(&self,endpoint : &str,parameters : ParameterHashMap<'l>,error_handler : &ErrorHandler<E>) -> Option<T> where  T: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned {
         let request = self.default_get_requestor(endpoint,parameters);
         let response = Self::request::<T,E>(request).await;
-         self.resolve_error(response,&error_handler)
+        self.resolve_error(response,&error_handler)
     }
 
     /// Handles a POST request to the specified endpoint with the provided JSON payload and returns the response data of type T.
@@ -158,7 +170,7 @@ pub trait RequestHandler : RequestDefaults{
     /// * `endpoint` - The endpoint URL to send the POST request to.
     /// * `json` - A string containing the JSON payload to include in the request.
     ///
-    async fn post_request_handler<T,E>(&self,endpoint : &str,json : &str,error_handler : &FunctionReturnType<E>) -> Option<T> where  T: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned {
+    async fn post_request_handler<T,E>(&self,endpoint : &str,json : &str,error_handler : &ErrorHandler<E>) -> Option<T> where  T: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned {
         let request = self.default_post_requestor(endpoint,json);
         let response = Self::request::<T,E>(request).await;
         self.resolve_error(response,&error_handler)
@@ -238,17 +250,6 @@ pub trait RequestDefaults: RequestModifiers {
     ///     // ...
     /// }
     fn client(&self) -> &reqwest::Client;
-
-    /// Sets the type of the default error resolver function 
-    type ErrorType;
-    
-    /// Returns the default error resolver function for handling errors of type [ErrorType.
-    ///
-    /// This function is used to handle errors that occur during API requests and responses. The error resolver function takes an error of type T as input and returns a reference to a dynamic function that handles the error. The dynamic function can be customized to handle specific error types or perform specific error handling logic.
-    ///
-    /// Note: The actual implementation of the error resolver function is not provided here, as it may vary depending on the specific use case and error type T.
-    fn default_error_handler(&self) -> FunctionReturnType<Self::ErrorType>;
-
     /// Modifies the provided `RequestBuilder` with default headers.
     ///
     /// # Arguments
