@@ -1,6 +1,6 @@
 [package]
 name = "api-request-utils-rs"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["Aarav Shah <aaravaditya51@gmail.com>"]
 description = "This library aims to provide a straightforward and efficient solution for making api requests It is designed to be user-friendly, customizable, and extensible, allowing developers to easily integrate and interact with APIs in their Rust applications."

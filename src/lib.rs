@@ -151,7 +151,7 @@ pub trait RequestHandler: RequestDefaults {
     /// * `endpoint` - The endpoint URL to send the GET request to.
     /// * `parameters` - A hashmap containing any parameters to include in the request.
     ///
-    async fn get_request_handler<'l,T,E>(&self,endpoint : &str,parameters : ParameterHashMap<'l>,error_handler : &ErrorHandler<E>) -> Option<T> where  T: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned {
+    async fn get_request_handler<'l,T,E>(&self,endpoint : &str,parameters : &ParameterHashMap<'l>,error_handler : &ErrorHandler<E>) -> Option<T> where  T: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned {
         let request = self.default_get_requestor(endpoint,parameters);
         let response = Self::request::<T,E>(request).await;
         self.resolve_error(response,&error_handler)
@@ -233,21 +233,6 @@ pub trait RequestModifiers: RequestInfo  {
 
 /// The RequestDefaults trait provides default methods for configuring and modifying HTTP requests.
 pub trait RequestDefaults: RequestModifiers {
-    /// Returns the reqwest::Client instance associated with the API client.
-    ///
-    /// The client is used to send HTTP requests to the API.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// fn main() {
-    ///     let api_client = APIClient::new();
-    ///     let client = api_client.client();
-    ///
-    ///     // Use the client to make HTTP requests
-    ///     // ...
-    /// }
-    fn client(&self) -> &reqwest::Client;
     /// Modifies the provided `RequestBuilder` with default headers.
     ///
     /// # Arguments
@@ -298,7 +283,7 @@ pub trait RequestDefaults: RequestModifiers {
     /// # Returns
     ///
     /// The modified `RequestBuilder` with default settings applied.
-    fn default_get_requestor<'a>(&self,endpoint : &str,parameters : ParameterHashMap<'a>) -> reqwest::RequestBuilder {
+    fn default_get_requestor<'a>(&self,endpoint : &str,parameters : &ParameterHashMap<'a>) -> reqwest::RequestBuilder {
         self.default_parameters(self.default_headers(self.client().get(Self::create_endpoint(endpoint)))).query(&parameters)
     }
 }
@@ -307,4 +292,20 @@ pub trait RequestDefaults: RequestModifiers {
 pub trait RequestInfo {
     /// The base URL for the requests.
     const BASE_URL : &'static str;
+
+    /// Returns the reqwest::Client instance associated with the API client.
+    ///
+    /// The client is used to send HTTP requests to the API.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// fn main() {
+    ///     let api_client = APIClient::new();
+    ///     let client = api_client.client();
+    ///
+    ///     // Use the client to make HTTP requests
+    ///     // ...
+    /// }
+    fn client(&self) -> &reqwest::Client;
 }
