@@ -13,9 +13,6 @@ pub use async_trait;
 /// The keys are string references, and the values are optional string references.
 pub type ParameterHashMap<'a> = HashMap<&'a str,serde_json::Value>;
 
-/// Alias for the `reqwest::Error` type.
-pub type ReqwestError = reqwest::Error;
-
 /// Alias for the `serde_json::Error` type.
 pub type DeserializationError = serde_json::Error;
 
@@ -24,10 +21,15 @@ pub type DeserializationError = serde_json::Error;
 /// The closure should be both `Send` and `Sync`.
 pub type ErrorHandler<E> = dyn Fn(RequestError<E>) + Sync;
 
+/// Alias for a closure mapping the Deserialized type into O 
+/// 
+/// This is useful when deserialized into serde_json::Value and then need to get element
+pub type CustomMapper<T,O> =  dyn Fn(T) -> O + Sync;
+
 /// Enum representing different types of request errors.
 pub enum RequestError<E> {
     /// Request sending error variant.
-    RequestingError(ReqwestError),
+    RequestingError(reqwest::Error),
 
     /// Error indicating inability to read the response body.
     UnableToReadBody,
@@ -130,9 +132,9 @@ pub trait RequestHandler: RequestDefaults {
     /// If the response is successful (`Ok` variant), the function returns `Some(value)`, containing
     /// the value. If the response is an error (`Err` variant), the `error_resolver` closure is invoked
     /// with the error as the argument, and `None` is returned.
-    fn resolve_error<T,E>(&self,response : Result<T,E>,error_handler: &dyn Fn(E)) -> Option<T> {
+    fn resolve_error<T,E,O>(&self,response : Result<T,RequestError<E>>,mapper : &CustomMapper<T,O>,error_handler : &ErrorHandler<E>) -> Option<O> {
         match response {
-            Ok(value) => Some(value),
+            Ok(value) => Some(mapper(value)),
             Err(error) => {
                 error_handler(error);
                 None
@@ -151,10 +153,10 @@ pub trait RequestHandler: RequestDefaults {
     /// * `endpoint` - The endpoint URL to send the GET request to.
     /// * `parameters` - A hashmap containing any parameters to include in the request.
     ///
-    async fn get_request_handler<'l,T,E>(&self,endpoint : &str,parameters : &ParameterHashMap<'l>,error_handler : &ErrorHandler<E>) -> Option<T> where  T: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned {
+    async fn get_request_handler<'l,T,E,O>(&self,endpoint : &str,parameters : &ParameterHashMap<'l>,error_handler : &ErrorHandler<E>,mapper : &CustomMapper<T,O>) -> Option<O> where  T: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned {
         let request = self.default_get_requestor(endpoint,parameters);
         let response = Self::request::<T,E>(request).await;
-        self.resolve_error(response,&error_handler)
+        self.resolve_error(response,mapper,error_handler)
     }
 
     /// Handles a POST request to the specified endpoint with the provided JSON payload and returns the response data of type T.
@@ -168,10 +170,10 @@ pub trait RequestHandler: RequestDefaults {
     /// * `endpoint` - The endpoint URL to send the POST request to.
     /// * `json` - A string containing the JSON payload to include in the request.
     ///
-    async fn post_request_handler<T,E>(&self,endpoint : &str,json : &str,error_handler : &ErrorHandler<E>) -> Option<T> where  T: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned {
+    async fn post_request_handler<T,E,O>(&self,endpoint : &str,json : &str,error_handler : &ErrorHandler<E>,mapper : &CustomMapper<T,O>) -> Option<O> where  T: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned {
         let request = self.default_post_requestor(endpoint,json);
         let response = Self::request::<T,E>(request).await;
-        self.resolve_error(response,&error_handler)
+        self.resolve_error(response,mapper,error_handler)
     }
 
 } 
