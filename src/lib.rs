@@ -1,211 +1,38 @@
 #![doc = include_str!("../README.md")]
-
 #![forbid(missing_docs)]
 
 use std::collections::HashMap;
 
+use reqwest::{
+    Client,
+    RequestBuilder,
+}; 
+
+use serde_json::Value;
+use serde::de::DeserializeOwned;
+
+use async_trait::async_trait;
+
+use thiserror::Error as ErrorMacro;
+
 pub use reqwest;
 pub use serde_json;
 pub use serde;
-pub use async_trait;
+pub use ::async_trait;
 
-/// A HashMap type used for storing parameters with optional values.
-/// The keys are string references, and the values are optional string references.
-pub type ParameterHashMap<'a> = HashMap<&'a str,serde_json::Value>;
+/// Trait to provide some basic info about API
+pub trait RequestInfo {
+    /// The base URL for the requests.
+    const BASE_URL : &'static str;
 
-/// Alias for the `serde_json::Error` type.
-pub type DeserializationError = serde_json::Error;
-
-/// Alias for a closure type that takes a `RequestError<E>` as an argument and returns `()`.
-///
-/// The closure should be both `Send` and `Sync`.
-pub type ErrorHandler<E> = dyn Fn(RequestError<E>) + Sync;
-
-/// Alias for a closure mapping the Deserialized type into O 
-/// 
-/// This is useful when deserialized into serde_json::Value and then need to get element
-pub type CustomMapper<T,O> =  dyn Fn(T) -> O + Sync;
-
-/// Enum representing different types of request errors.
-pub enum RequestError<E> {
-    /// Request sending error variant.
-    RequestingError(reqwest::Error),
-
-    /// Error indicating inability to read the response body.
-    UnableToReadBody,
-
-    /// Error indicating invalid JSON body during deserialization.
-    InvalidJsonBody(DeserializationError),
-
-    /// Json when request is not successful (default when status code is not 200)
-    Json(E),
+    /// Returns the [reqwest::Client] instance associated with the API client.
+    ///
+    /// The client is used to send HTTP requests to the API.
+    fn client(&self) -> &Client;
 }
-
-/// A trait for handling HTTP requests.
-#[async_trait::async_trait]
-pub trait RequestHandler: RequestDefaults {
-    /// Sends a request using the given RequestBuilder and handles the response.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let url = "https://api.example.com";
-    ///     let request = reqwest::Client::new().get(url);
-    ///
-    ///     match request::<serde_json::Value, serde_json::Value>(request).await {
-    ///         Ok(response) => {
-    ///             println!("Response: {:?}", response);
-    ///         }
-    ///         Err(error) => {
-    ///             match error {
-    ///                 RequestError::Internal(message) => {
-    ///                     eprintln!("Internal Error: {}", message);
-    ///                 }
-    ///                 RequestError::Json(error_data) => {
-    ///                     eprintln!("JSON Error: {:?}", error_data);
-    ///                 }
-    ///             }
-    ///         }
-    ///     }
-    /// }
-    /// ```
-    async fn request<T,E>(request: reqwest::RequestBuilder) -> Result<T,RequestError<E>> where T : serde::de::DeserializeOwned , E : serde::de::DeserializeOwned {
-        let response_result = request.send().await;
-        match response_result {
-            Err(error) => return Err(RequestError::RequestingError(error)),
-            Ok(response) => {
-                let status = response.status();
-                let body_result = response.text().await;
-
-                match body_result {
-                    Err(_) => return Err(RequestError::UnableToReadBody),
-                    Ok(body) => match status.is_success() {
-                        true => return Ok(serde_json::from_str(&body).unwrap()),
-                        false => return Err(RequestError::Json(serde_json::from_str(&body).unwrap())),
-                    }
-                };
-            }
-        };
-    }
-    
-    /// Resolves the error in the response and returns an option containing the value or `None`.
-    ///
-    /// # Arguments
-    ///
-    /// * `response` - The response as a `Result` type.
-    /// * `error_resolver` - The closure that handles the error and performs custom error handling.
-    ///
-    /// # Returns
-    ///
-    /// An option containing the value if the response is successful, otherwise `None`.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// fn handle_error(error: &AuthErrorInfo) {
-    ///     // Custom error handling logic
-    ///     // ...
-    /// }
-    ///
-    /// let response: Result<i32, AuthError> = /* Some API response */;
-    /// let result = resolve_error(&response, handle_error);
-    ///
-    /// match result {
-    ///     Some(value) => {
-    ///         // Process the value
-    ///         // ...
-    ///     }
-    ///     None => {
-    ///         // Error occurred, handle accordingly
-    ///         // ...
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// In the example above, the `resolve_error` function takes a `response` of type `Result<T, E>`,
-    /// where `T` represents the success type and `E` represents the error type. It also accepts an
-    /// `error_resolver` closure of type `Fn(&E)`, which is responsible for handling the error and
-    /// performing custom error handling logic.
-    ///
-    /// If the response is successful (`Ok` variant), the function returns `Some(value)`, containing
-    /// the value. If the response is an error (`Err` variant), the `error_resolver` closure is invoked
-    /// with the error as the argument, and `None` is returned.
-    fn resolve_error<T,E,O>(&self,response : Result<T,RequestError<E>>,mapper : &CustomMapper<T,O>,error_handler : &ErrorHandler<E>) -> Option<O> {
-        match response {
-            Ok(value) => Some(mapper(value)),
-            Err(error) => {
-                error_handler(error);
-                None
-            }
-        }
-    }
-    /// Handles a GET request to the specified endpoint with the provided parameters and returns the response data of type `T`.
-    /// 
-    /// This asynchronous function constructs (by default) a GET request using the `default_get_requestor` method with the given endpoint and parameters. 
-    /// It then sends the request using the request method, expecting a response of type `T` or an error of type `E`.
-    /// The error is resolved using the `resolve_error` method and returns an `Option<T>` representing the response data if successful,
-    /// or `None` if an error occurred.
-    /// 
-    /// # Arguments
-    ///
-    /// * `endpoint` - The endpoint URL to send the GET request to.
-    /// * `parameters` - A hashmap containing any parameters to include in the request.
-    ///
-    async fn get_request_handler<'l,T,E,O>(&self,endpoint : &str,parameters : &ParameterHashMap<'l>,error_handler : &ErrorHandler<E>,mapper : &CustomMapper<T,O>) -> Option<O> where  T: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned {
-        let request = self.default_get_requestor(endpoint,parameters);
-        let response = Self::request::<T,E>(request).await;
-        self.resolve_error(response,mapper,error_handler)
-    }
-
-    /// Handles a POST request to the specified endpoint with the provided JSON payload and returns the response data of type T.
-    ///
-    /// This asynchronous function constructs a POST request using the `default_post_requestor` method with the given endpoint and json payload. 
-    /// It then sends the request using the request method, expecting a response of type `T` or an error of type `E`
-    /// The error is resolved using the `resolve_error` method and returns an `Option<T>` representing the response data if successful, 
-    /// or `None` if an error occurred.
-    /// # Arguments
-    ///
-    /// * `endpoint` - The endpoint URL to send the POST request to.
-    /// * `json` - A string containing the JSON payload to include in the request.
-    ///
-    async fn post_request_handler<T,E,O>(&self,endpoint : &str,json : &str,error_handler : &ErrorHandler<E>,mapper : &CustomMapper<T,O>) -> Option<O> where  T: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned {
-        let request = self.default_post_requestor(endpoint,json);
-        let response = Self::request::<T,E>(request).await;
-        self.resolve_error(response,mapper,error_handler)
-    }
-
-} 
 
 /// This trait provides methods for modifying the struct in a specific way:
 pub trait RequestModifiers: RequestInfo  {
-    /// Adds an Authorization header to the given RequestBuilder with the provided token.
-    ///
-    /// The Authorization header follows the format "Bearer TOKEN", where TOKEN is the
-    /// authentication token used for authorization.
-    ///
-    /// # Arguments
-    ///
-    /// * request_builder - The RequestBuilder to add the header to.
-    /// * token - The authentication token to include in the Authorization header.
-    ///
-    /// # Returns
-    ///
-    /// The modified RequestBuilder with the Authorization header added.
-    ///
-    /// # Example
-    ///
-    /// ```rust 
-    /// use reqwest::RequestBuilder;
-    /// let request_builder = reqwest::Client::new().get("https://example.com"); 
-    /// let token = "YOUR_AUTH_TOKEN";
-    /// let modified_request_builder = authorization_header(&request_builder, token);
-    /// ```
-    fn authorization_header(request_builder : reqwest::RequestBuilder,token : &str) -> reqwest::RequestBuilder {
-        request_builder.header("Authorization",format!(" Bearer {}",token))
-    }
-
     /// Joins the given endpoint with the base URL.
     ///
     /// # Arguments
@@ -215,21 +42,33 @@ pub trait RequestModifiers: RequestInfo  {
     /// # Returns
     ///
     /// The joined URL as a `String`.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// struct MyStruct;
-    /// impl RequestHandler for ... {
-    ///     const BASE_URL: &'static str = "https://api.example.com";
-    /// }
-    /// fn main(){
-    ///    let url =  MyStruct::create_endpoint("get");
-    ///    assert_eq!(url,"https://api.example.com/get"); // using the default implementation
-    /// }
-    /// ```
     fn create_endpoint(endpoint : &str) -> String {
         format!("{}/{}",Self::BASE_URL,endpoint)
+    }
+
+    /// Conditionally adds a header to the given `RequestBuilder` based on the result of a closure.
+    ///
+    /// If the closure returns `true`, the specified header with the provided `key` and `value`
+    /// will be added to the request. If the closure returns `false`, no changes will be made
+    /// to the request.
+    ///
+    /// # Arguments
+    ///
+    /// * `request_builder` - The `RequestBuilder` to add the header to.
+    /// * `key` - The key of the header to be added.
+    /// * `value` - The value of the header to be added.
+    /// * `closure` - A closure that determines whether the header should be added. It should
+    ///               take no arguments and return a boolean value.
+    ///
+    /// # Returns
+    ///
+    /// The modified `RequestBuilder` with the header added if the closure returns `true`,
+    /// otherwise the original `RequestBuilder` without any modifications.
+    fn add_header_if(request_builder: RequestBuilder,key: &str, value: &str,closure : impl FnOnce() -> bool) -> RequestBuilder {
+        match closure() {
+            true => request_builder.header(key, value),
+            false => request_builder
+        }
     }
 }
 
@@ -261,7 +100,7 @@ pub trait RequestDefaults: RequestModifiers {
         request_builder
     }
 
-    /// Modifies the provided `RequestBuilder` with default settings for post request.
+     /// Modifies the provided `RequestBuilder` with default settings for post request.
     ///
     /// # Arguments
     ///
@@ -271,8 +110,8 @@ pub trait RequestDefaults: RequestModifiers {
     /// # Returns
     ///
     /// The modified `RequestBuilder` with default settings applied.
-    fn default_post_requestor(&self,endpoint : &str, json : &str) -> reqwest::RequestBuilder {
-        self.default_parameters(self.default_headers(self.client().post(Self::create_endpoint(endpoint)))).body(json.to_owned())
+    fn default_post_requestor(&self,endpoint : &str, json : String) -> reqwest::RequestBuilder {
+        self.default_parameters(self.default_headers(self.client().post(Self::create_endpoint(endpoint)))).body(json)
     }
 
     /// Modifies the provided `RequestBuilder` with default settings for get request.
@@ -285,29 +124,137 @@ pub trait RequestDefaults: RequestModifiers {
     /// # Returns
     ///
     /// The modified `RequestBuilder` with default settings applied.
-    fn default_get_requestor<'a>(&self,endpoint : &str,parameters : &ParameterHashMap<'a>) -> reqwest::RequestBuilder {
+    fn default_get_requestor<'a>(&self,endpoint : &str,parameters : &HashMap<&'a str,Value>) -> reqwest::RequestBuilder {
         self.default_parameters(self.default_headers(self.client().get(Self::create_endpoint(endpoint)))).query(&parameters)
     }
 }
 
-/// Trait to provide some basic info about API
-pub trait RequestInfo {
-    /// The base URL for the requests.
-    const BASE_URL : &'static str;
 
-    /// Returns the reqwest::Client instance associated with the API client.
+/// A trait for handling HTTP requests.
+#[async_trait]
+pub trait RequestHandler<T : DeserializeOwned,O : DeserializeOwned,E : DeserializeOwned> : RequestDefaults {
+    /// Sends an HTTP request, processes the response, and maps it using the provided closure.
     ///
-    /// The client is used to send HTTP requests to the API.
+    /// This asynchronous function sends an HTTP request using the given `reqwest::RequestBuilder`,
+    /// processes the response, and maps it using the provided closure. It returns the mapped
+    /// result if the request is successful, or an `RequestError::ErrorPayload` variant if the
+    /// request fails.
     ///
-    /// # Examples
+    /// # Arguments
     ///
-    /// ```rust
-    /// fn main() {
-    ///     let api_client = APIClient::new();
-    ///     let client = api_client.client();
+    /// * `self` - A reference to the struct implementing this trait.
+    /// * `request` - The `reqwest::RequestBuilder` representing the request to be sent.
+    /// * `map` - A closure that maps the successful response JSON into the desired output type. Just write `|x| x` if the not mapping is required. 
     ///
-    ///     // Use the client to make HTTP requests
-    ///     // ...
-    /// }
-    fn client(&self) -> &reqwest::Client;
+    /// # Returns
+    ///
+    /// A `Result` containing the mapped output type or an `RequestError` variant.
+    async fn request_map(request: reqwest::RequestBuilder,map : impl FnOnce(T) -> O + Send + Sync) -> Result<O,RequestError<E>> {
+        let response = request.send().await?;
+        let status = response.status();
+
+        let body = response.bytes().await?;
+        
+        match status.is_success() {
+            true => {
+                let json = serde_json::from_slice(&body)?;
+                Ok(map(json))
+            }
+            false => {
+                let json = serde_json::from_slice(&body)?;
+                Err(RequestError::ErrorPayload(json))
+            }
+        }
+    }
+
+    /// Resolves the error in the response and returns an option containing the value or `None`.
+    ///
+    /// # Arguments
+    ///
+    /// * `response` - The response as a `Result` type.
+    /// * `error_resolver` - The closure that handles the error and performs custom error handling.
+    ///
+    /// # Returns
+    ///
+    /// An option containing the value if the response is successful, otherwise `None`.
+    fn resolve_error(&self,response : Result<O,RequestError<E>>,error_handler : impl Fn(RequestError<E>) + Sync) -> Option<O> {
+        match response {
+            Ok(value) => Some(value),
+            Err(error) => {
+                error_handler(error);
+                None
+            }
+        }
+    }
+
+    /// This asynchronous function constructs (by default) a GET request using the `default_get_requestor` method
+    /// with the given endpoint and parameters. It then sends the request using the request method, expecting
+    /// a response of type `T` or an error of type `E`. The error is resolved using the `resolve_error` method
+    /// and returns an `Option<T>` representing the response data if successful, or `None` if an error occurred.
+    ///
+    /// # Arguments
+    ///
+    /// * `endpoint` - The endpoint URL to send the GET request to.
+    /// * `parameters` - A hashmap containing any parameters to include in the request.
+    /// * `map` - A closure that maps the successful response JSON into the desired output type.
+    /// * `error_handler` - A closure that handles the error case if an `RequestError` occurs.
+    ///
+    /// # Returns
+    ///
+    /// An `Option<O>` representing the response data if successful, or `None` if an error occurred.
+    async fn get_request_handler<'a>(&self,endpoint : &str,parameters : &HashMap<&'a str,Value>,map : impl FnOnce(T) -> O + Send + Sync,error_handler : impl Fn(RequestError<E>) + Sync + Send) -> Option<O> { 
+        let request = self.default_get_requestor(endpoint,parameters);
+        let response = Self::request_map(request,map).await;
+        self.resolve_error(response,error_handler)
+    }
+
+    /// Handles a POST request to the specified endpoint with the provided JSON payload and returns the response data of type T.
+    ///
+    /// This asynchronous function constructs a POST request using the `default_post_requestor` method with the given endpoint
+    /// and JSON payload. It then sends the request using the request method, expecting a response of type `T` or an error of type `E`.
+    /// The error is resolved using the `resolve_error` method and returns an `Option<T>` representing the response data if successful,
+    /// or `None` if an error occurred.
+    ///
+    /// # Arguments
+    ///
+    /// * `endpoint` - The endpoint URL to send the POST request to.
+    /// * `json` - A string containing the JSON payload to include in the request.
+    /// * `map` - A closure that maps the successful response JSON into the desired output type.
+    /// * `error_handler` - A closure that handles the error case if an `RequestError` occurs.
+    ///
+    /// # Returns
+    ///
+    /// An `Option<O>` representing the response data if successful, or `None` if an error occurred.
+    async fn post_request_handler(&self,endpoint : &str,json : String,map : impl FnOnce(T) -> O + Send + Sync,error_handler : impl Fn(RequestError<E>) + Sync  + Send) -> Option<O> {
+        let request = self.default_post_requestor(endpoint,json);
+        let response = Self::request_map(request,map).await;
+        self.resolve_error(response,error_handler)
+    }
+}
+
+
+/// Enum representing different types of HTTPS errors.
+#[derive(ErrorMacro)]
+pub enum RequestError<E> {
+    /// Error that occurs when sending a request.
+    #[error(
+r#"Failed operation relating to request to ({}) with status code of {}. 
+Is request: {}, 
+Is connect: {}, 
+Is body: {}"#,
+.0.url().map(|x|x.to_string()).unwrap_or(String::from("Not Found")),
+.0.status().map(|x|x.to_string()).unwrap_or(String::from("Not Found")),
+.0.is_request(),
+.0.is_connect(),
+.0.is_body()
+)]
+    RequestError(#[from] reqwest::Error),
+
+    #[error("Failed to parse json due to {}",.0)]
+    /// Error indicating invalid JSON body during deserialization.
+    InvalidJsonBody(#[from] serde_json::Error),
+
+    /// Error payload (json) when request is not successful
+    #[error("Request error playload : {0}")]
+    ErrorPayload(#[source] E),
 }
