@@ -33,8 +33,8 @@ If you're using `api-request-utils-rs` in your project, feel free to contact me 
 # Usage
 
 Before you can start making API requests, you need to create an API client that implements the necessary traits. Here's an example of how you can define and implement the API client struct:
-
-```rust
+ 
+```rust ignore 
 use api_request_utils::*;
 
 struct MyAPIClient {
@@ -62,7 +62,7 @@ impl RequestHandler for MyAPIClient {} // Default settings should be enought
 
 To make a GET request, you can use the `get_request_handler` method provided by the `RequestHandler` trait. Here's an example:
 
-```rust
+```rust ignore 
 #[tokio::main]
 async fn main() {
     let api_client = MyAPIClient::new();
@@ -86,7 +86,7 @@ async fn main() {
 
 For making a POST request, you can utilize the `post_request_handler` method similarly. Here's an example:
 
-```rust
+```rust ignore 
 #[tokio::main]
 async fn main() {
     let api_client = MyAPIClient::new();
@@ -114,7 +114,7 @@ async fn main() {
 
 The library provides an `RequestError` enum to handle different types of request errors. You can pattern match on this enum to handle specific error scenarios:
 
-```rust
+```rust ignore 
 use api_request_utils::RequestError;
 
 match error {
